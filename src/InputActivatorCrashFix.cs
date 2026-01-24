@@ -9,7 +9,7 @@ public struct InputData_t
 {
     public nint Activator;
     public nint Caller;
-    public CVariant Value;
+    public CVariant<CVariantDefaultAllocator> Value;
     public int OutputID;
 }
 

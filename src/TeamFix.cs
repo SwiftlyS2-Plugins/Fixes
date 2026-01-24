@@ -18,6 +18,7 @@ public partial class Fixes
 
         core.Scheduler.NextTick(() =>
         {
+            if (player == null) return;
             if (!player.IsValid) return;
 
             var pawn = player.Pawn;
