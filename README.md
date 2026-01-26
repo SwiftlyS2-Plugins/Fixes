@@ -22,6 +22,12 @@
 - Use the `dotnet publish -c Release` command to build and package your plugin.
 - Distribute the generated zip file or the contents of the `build/publish` directory.
 
+## Implemented Fixes
+
+- Game Ban Removal
+- Input Activator Crash
+- Pawn TeamNum
+
 ## Acknowledgements
 
 Thanks to CS2Fixes for providing the fixes for Game Bans and Input Activator Crash.
