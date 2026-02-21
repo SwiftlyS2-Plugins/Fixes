@@ -26,7 +26,7 @@
 
 - Game Ban Removal
 - Input Activator Crash
-- Pawn TeamNum
+- Team Limit Fix
 
 ## Acknowledgements
 
