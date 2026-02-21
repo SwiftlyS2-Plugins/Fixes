@@ -9,6 +9,8 @@ public partial class Fixes
     [GameEventHandler(HookMode.Post)]
     private HookResult OnRoundStart(EventRoundStart @event)
     {
+        if (!Config.CurrentValue.EnableTeamLimitFix) return HookResult.Continue;
+
         int maxPlayers = Core.Engine.GlobalVars.MaxClients;
         int limit = maxPlayers;
 
