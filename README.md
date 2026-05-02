@@ -27,6 +27,8 @@
 - Game Ban Removal
 - Input Activator Crash
 - Team Limit Fix
+- Sv Cheats Fix
+- Blank Map Fix
 
 ## Acknowledgements
 
