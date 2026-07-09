@@ -67,7 +67,7 @@ public partial class Fixes
             playerSeeds[playerid] = seed;
         }
 
-        msg.Xuid = seed + (ulong)msg.Client;
+        msg.Xuid = seed + (ulong)msg.Entity;
         return HookResult.Continue;
     }
 }
