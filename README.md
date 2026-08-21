@@ -24,6 +24,7 @@
 
 ## Implemented Fixes
 
+- Server-list bots entering and spamming chat
 - Game Ban Removal
 - Input Activator Crash
 - Team Limit Fix
