@@ -9,4 +9,5 @@ public class FixesConfig
     public bool EnableSvCheatsFix { get; set; } = true;
     public bool EnableVoiceFix { get; set; } = true;
     public bool EnableFakeMessagesFix { get; set; } = true;
+    public bool EnableJumpSpamFix { get; set; } = true;
 }
