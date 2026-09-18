@@ -32,7 +32,11 @@
 - Blank Map Fix
 - Voice Fix ( https://github.com/Source2ZE/CS2VoiceFix )
 - Jump Spam Fix
+- Ramp Bug Fix ( ported from https://github.com/Nukoooo/RampFix )
 
 ## Acknowledgements
 
 Thanks to CS2Fixes for providing the fixes for Game Bans and Input Activator Crash.
+
+Thanks to zer0.k for the original ramp-bug fix logic, and to Nukoooo for the ModSharp
+port it was ported to SwiftlyS2 from.
