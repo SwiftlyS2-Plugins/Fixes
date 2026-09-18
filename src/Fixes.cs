@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Fixes;
 
-[PluginMetadata(Id = "Fixes", Version = "1.0.15", Name = "Fixes", Author = "Swiftly Development Team", Description = "No description.")]
+[PluginMetadata(Id = "Fixes", Version = "1.0.16", Name = "Fixes", Author = "Swiftly Development Team", Description = "No description.")]
 #pragma warning disable CS9107 // Parameter is captured into the state of the enclosing type and its value is also passed to the base constructor. The value might be captured by the base class as well.
 public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
 #pragma warning restore CS9107 // Parameter is captured into the state of the enclosing type and its value is also passed to the base constructor. The value might be captured by the base class as well.
@@ -43,6 +43,7 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
         InitVoiceFix();
         InitSvCheatsFix();
         InitJumpSpamFix();
+        InitRampFix();
     }
 
     public override void Unload()
