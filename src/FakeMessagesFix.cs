@@ -8,19 +8,43 @@ namespace Fixes;
 
 public partial class Fixes
 {
-    private static List<int> inGameClients = [];
-    private static Lock _inGameClientsLock = new();
+    private readonly HashSet<int> inGameClients = [];
+    private readonly Lock _inGameClientsLock = new();
+
+    private void InitFakeMessagesFix()
+    {
+        var players = Core.PlayerManager.GetAllValidPlayers();
+
+        lock (_inGameClientsLock)
+        {
+            inGameClients.Clear();
+
+            foreach (var player in players)
+            {
+                inGameClients.Add(player.PlayerID);
+            }
+        }
+    }
 
     [ClientChatHookHandler]
     public HookResult OnClientChat(int playerId, string text, bool teamonly)
     {
-        if (!Config.CurrentValue.EnableFakeMessagesFix) return HookResult.Continue;
+        if (!Config.CurrentValue.EnableFakeMessagesFix)
+        {
+            return HookResult.Continue;
+        }
 
-        if (playerId == -1) return HookResult.Continue;
+        if (playerId == -1)
+        {
+            return HookResult.Continue;
+        }
 
         lock (_inGameClientsLock)
         {
-            if (!inGameClients.Contains(playerId)) return HookResult.Stop;
+            if (!inGameClients.Contains(playerId))
+            {
+                return HookResult.Stop;
+            }
         }
 
         return HookResult.Continue;
