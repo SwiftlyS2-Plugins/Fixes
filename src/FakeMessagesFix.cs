@@ -10,9 +10,18 @@ public partial class Fixes
 {
     private readonly HashSet<int> inGameClients = [];
     private readonly Lock _inGameClientsLock = new();
+    private bool fakeMessagesFixEnabled = false;
 
     private void InitFakeMessagesFix()
     {
+        fakeMessagesFixEnabled = Config.CurrentValue.EnableFakeMessagesFix;
+        Config.OnChange(
+            (v, _) =>
+            {
+                fakeMessagesFixEnabled = v.EnableFakeMessagesFix;
+            }
+        );
+
         var players = Core.PlayerManager.GetAllValidPlayers();
 
         lock (_inGameClientsLock)
@@ -29,7 +38,7 @@ public partial class Fixes
     [ClientChatHookHandler]
     public HookResult OnClientChat(int playerId, string text, bool teamonly)
     {
-        if (!Config.CurrentValue.EnableFakeMessagesFix)
+        if (!fakeMessagesFixEnabled)
         {
             return HookResult.Continue;
         }
