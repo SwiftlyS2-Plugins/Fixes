@@ -1,16 +1,32 @@
 using SwiftlyS2.Shared.GameEventDefinitions;
-using SwiftlyS2.Shared.GameEvents;
 using SwiftlyS2.Shared.Misc;
 
 namespace Fixes;
 
 public partial class Fixes
 {
-    [GameEventHandler(HookMode.Pre)]
+    private Guid? blankMapFixHookId;
+
+    private void SetBlankMapFixEnabled(bool enabled)
+    {
+        var isEnabled = blankMapFixHookId.HasValue;
+        if (enabled == isEnabled)
+        {
+            return;
+        }
+
+        if (enabled)
+        {
+            blankMapFixHookId = Core.GameEvent.HookPre<EventNextlevelChanged>(OnNextLevelChangedEvent);
+            return;
+        }
+
+        Core.GameEvent.Unhook(blankMapFixHookId!.Value);
+        blankMapFixHookId = null;
+    }
+
     public HookResult OnNextLevelChangedEvent(EventNextlevelChanged @event)
     {
-        if (!Config.CurrentValue.EnableBlankMapFix) return HookResult.Continue;
-
         if (@event.NextLevel == "")
         {
             var mapName = Core.Engine.GlobalVars.MapName;

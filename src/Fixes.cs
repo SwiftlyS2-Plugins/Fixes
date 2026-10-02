@@ -38,12 +38,21 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
         var provider = services.BuildServiceProvider();
         Config = provider.GetRequiredService<IOptionsMonitor<FixesConfig>>();
 
-        InitGameBanFixes();
-        InitInputActivatorCrashFix();
-        InitVoiceFix();
-        InitSvCheatsFix();
-        InitJumpSpamFix();
-        InitRampFix();
+        ApplyFixes(Config.CurrentValue);
+        Config.OnChange((config, _) => Core.Scheduler.NextTick(() => ApplyFixes(config)));
+    }
+
+    private void ApplyFixes(FixesConfig config)
+    {
+        SetSteamBanFixEnabled(config.EnableSteamBanFix);
+        SetInputActivatorCrashFixEnabled(config.EnableInputActivatorCrashFix);
+        SetTeamLimitFixEnabled(config.EnableTeamLimitFix);
+        SetBlankMapFixEnabled(config.EnableBlankMapFix);
+        SetSvCheatsFixEnabled(config.EnableSvCheatsFix);
+        SetVoiceFixEnabled(config.EnableVoiceFix);
+        SetFakeMessagesFixEnabled(config.EnableFakeMessagesFix);
+        SetJumpSpamFixEnabled(config.EnableJumpSpamFix);
+        SetRampFixEnabled(config.EnableRampFix);
     }
 
     public override void Unload()

@@ -12,24 +12,45 @@ public partial class Fixes
     private bool jumpSpamFixEnabled = false;
     private readonly ConcurrentDictionary<int, int> _lastJumpTick = new();
 
-    private void InitJumpSpamFix()
+    private void SetJumpSpamFixEnabled(bool enabled)
     {
-        jumpSpamFixEnabled = Config.CurrentValue.EnableJumpSpamFix;
-        Config.OnChange((v, _) =>
+        if (enabled == jumpSpamFixEnabled)
         {
-            jumpSpamFixEnabled = v.EnableJumpSpamFix;
-        });
+            return;
+        }
 
+        jumpSpamFixEnabled = enabled;
+
+        if (enabled)
+        {
+            EnableJumpSpamFix();
+            return;
+        }
+
+        DisableJumpSpamFix();
+    }
+
+    private void EnableJumpSpamFix()
+    {
         Core.GameHooks.Movement.CheckJumpButtonModern.Pre += OnCheckJumpButtonModernPre;
         Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre += OnCheckJumpButtonLegacyPre;
         Core.GameHooks.Movement.OnJumpModern.Post += OnJumpModernPost;
         Core.GameHooks.Movement.OnJumpLegacy.Post += OnJumpLegacyPost;
+        Core.Event.OnClientDisconnected += OnJumpSpamFixClientDisconnected;
+    }
+
+    private void DisableJumpSpamFix()
+    {
+        Core.GameHooks.Movement.CheckJumpButtonModern.Pre -= OnCheckJumpButtonModernPre;
+        Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre -= OnCheckJumpButtonLegacyPre;
+        Core.GameHooks.Movement.OnJumpModern.Post -= OnJumpModernPost;
+        Core.GameHooks.Movement.OnJumpLegacy.Post -= OnJumpLegacyPost;
+        Core.Event.OnClientDisconnected -= OnJumpSpamFixClientDisconnected;
+        _lastJumpTick.Clear();
     }
 
     private void OnCheckJumpButtonModernPre(ref CheckJumpButtonModernMovementPreContext ctx)
     {
-        if (!jumpSpamFixEnabled) return;
-
         var player = ctx.Params.Player;
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
@@ -42,8 +63,6 @@ public partial class Fixes
 
     private void OnCheckJumpButtonLegacyPre(ref CheckJumpButtonLegacyMovementPreContext ctx)
     {
-        if (!jumpSpamFixEnabled) return;
-
         var player = ctx.Params.Player;
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
@@ -56,8 +75,6 @@ public partial class Fixes
 
     private void OnJumpModernPost(ref OnJumpModernMovementPostContext ctx)
     {
-        if (!jumpSpamFixEnabled) return;
-
         var player = ctx.Params.Player;
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
@@ -67,8 +84,6 @@ public partial class Fixes
 
     private void OnJumpLegacyPost(ref OnJumpLegacyMovementPostContext ctx)
     {
-        if (!jumpSpamFixEnabled) return;
-
         var player = ctx.Params.Player;
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
@@ -76,7 +91,6 @@ public partial class Fixes
         _lastJumpTick[player.Slot] = moveData.TickCount;
     }
 
-    [EventListener<EventDelegates.OnClientDisconnected>]
     public void OnJumpSpamFixClientDisconnected(IOnClientDisconnectedEvent @event)
     {
         _lastJumpTick.TryRemove(@event.PlayerId, out _);

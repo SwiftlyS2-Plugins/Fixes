@@ -20,33 +20,44 @@ public partial class Fixes
 
     private IUnmanagedFunction<CheckSteamBanDelegate>? _CheckSteamBanDelegate;
     private nint addressGCBanInfo;
-    private bool enableSteamBanFix = false;
+    private Guid? steamBanFixHookId;
 
-    public void InitGameBanFixes()
+    private void SetSteamBanFixEnabled(bool enabled)
     {
-        _CheckSteamBanDelegate = Core.Memory.GetUnmanagedFunctionByAddress<CheckSteamBanDelegate>(
-            Core.GameData.GetSignature("CheckSteamBan")
-        );
-
-        addressGCBanInfo = core.Memory.ResolveXrefAddress(
-            core.GameData.GetSignature("CCSGameRules::m_mapGcBanInformation")
-        );
-
-        enableSteamBanFix = Config.CurrentValue.EnableSteamBanFix;
-        Config.OnChange((v, _) =>
+        var isEnabled = steamBanFixHookId.HasValue;
+        if (enabled == isEnabled)
         {
-            enableSteamBanFix = v.EnableSteamBanFix;
-        });
+            return;
+        }
 
-        _CheckSteamBanDelegate.AddHook(next =>
+        if (enabled)
+        {
+            EnableSteamBanFix();
+            return;
+        }
+
+        _CheckSteamBanDelegate!.RemoveHook(steamBanFixHookId!.Value);
+        steamBanFixHookId = null;
+    }
+
+    private void EnableSteamBanFix()
+    {
+        if (_CheckSteamBanDelegate == null)
+        {
+            var checkSteamBanAddress = Core.GameData.GetSignature("CheckSteamBan");
+            var gcBanInfoSignature = Core.GameData.GetSignature("CCSGameRules::m_mapGcBanInformation");
+
+            _CheckSteamBanDelegate = Core.Memory.GetUnmanagedFunctionByAddress<CheckSteamBanDelegate>(checkSteamBanAddress);
+            addressGCBanInfo = Core.Memory.ResolveXrefAddress(gcBanInfoSignature);
+        }
+
+        steamBanFixHookId = _CheckSteamBanDelegate.AddHook(next =>
         {
             unsafe
             {
                 return () =>
                 {
                     next()();
-
-                    if (!enableSteamBanFix) return;
 
                     ref var gcBanInfoMap = ref Unsafe.AsRef<CUtlMap<uint, CGcBanInformation_t, uint>>((void*)addressGCBanInfo);
 

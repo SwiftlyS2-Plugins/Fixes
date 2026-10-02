@@ -7,20 +7,26 @@ public partial class Fixes
 {
     private bool svCheatsFixEnabled = false;
 
-    private void InitSvCheatsFix()
+    private void SetSvCheatsFixEnabled(bool enabled)
     {
-        svCheatsFixEnabled = Config.CurrentValue.EnableSvCheatsFix;
-        Config.OnChange((v, _) =>
+        if (enabled == svCheatsFixEnabled)
         {
-            svCheatsFixEnabled = v.EnableSvCheatsFix;
-        });
+            return;
+        }
+
+        svCheatsFixEnabled = enabled;
+
+        if (enabled)
+        {
+            Core.Event.OnConVarValueChanged += OnConVarValueChanged;
+            return;
+        }
+
+        Core.Event.OnConVarValueChanged -= OnConVarValueChanged;
     }
 
-    [EventListener<EventDelegates.OnConVarValueChanged>]
     public void OnConVarValueChanged(IOnConVarValueChanged @event)
     {
-        if (!svCheatsFixEnabled) return;
-
         if (@event.ConVarName == "sv_cheats")
         {
             if (bool.TryParse(@event.NewValue, out var svCheatsValue) && svCheatsValue == false)

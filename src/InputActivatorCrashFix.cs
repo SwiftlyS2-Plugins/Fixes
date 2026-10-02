@@ -18,42 +18,51 @@ public partial class Fixes
     private unsafe delegate nint CBaseFilter_InputTestActivatorDelegateLinux(nint pEntity, InputData_t* inputData);
 
     private IUnmanagedFunction<CBaseFilter_InputTestActivatorDelegateLinux>? _CBaseFilter_InputTestActivatorDelegateLinux;
-    private bool enableInputActivatorCrashFix = false;
+    private Guid? inputActivatorCrashFixHookId;
 
-    public void InitInputActivatorCrashFix()
+    private void SetInputActivatorCrashFixEnabled(bool enabled)
     {
-        
-        enableInputActivatorCrashFix = Config.CurrentValue.EnableInputActivatorCrashFix;
-        Config.OnChange((v, _) =>
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            enableInputActivatorCrashFix = v.EnableInputActivatorCrashFix;
-        });
-
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-        } 
-        else
-        {
-            _CBaseFilter_InputTestActivatorDelegateLinux = Core.Memory.GetUnmanagedFunctionByAddress<CBaseFilter_InputTestActivatorDelegateLinux>(
-                Core.GameData.GetSignature("CBaseFilter::InputTestActivator")
-            );
-
-            _CBaseFilter_InputTestActivatorDelegateLinux.AddHook(next =>
-            {
-                unsafe
-                {
-                    return (pEntity, inputData) =>
-                    {
-                        if (enableInputActivatorCrashFix)
-                        {
-                            if (inputData->Activator == 0) return 0;
-                        }
-
-                        return next()(pEntity, inputData);
-                    };
-                }
-            });
+            return;
         }
+
+        var isEnabled = inputActivatorCrashFixHookId.HasValue;
+        if (enabled == isEnabled)
+        {
+            return;
+        }
+
+        if (enabled)
+        {
+            EnableInputActivatorCrashFix();
+            return;
+        }
+
+        _CBaseFilter_InputTestActivatorDelegateLinux!.RemoveHook(inputActivatorCrashFixHookId!.Value);
+        inputActivatorCrashFixHookId = null;
     }
 
+    private void EnableInputActivatorCrashFix()
+    {
+        if (_CBaseFilter_InputTestActivatorDelegateLinux == null)
+        {
+            var inputTestActivatorAddress = Core.GameData.GetSignature("CBaseFilter::InputTestActivator");
+
+            _CBaseFilter_InputTestActivatorDelegateLinux = Core.Memory.GetUnmanagedFunctionByAddress<CBaseFilter_InputTestActivatorDelegateLinux>(inputTestActivatorAddress);
+        }
+
+        inputActivatorCrashFixHookId = _CBaseFilter_InputTestActivatorDelegateLinux.AddHook(next =>
+        {
+            unsafe
+            {
+                return (pEntity, inputData) =>
+                {
+                    if (inputData->Activator == 0) return 0;
+
+                    return next()(pEntity, inputData);
+                };
+            }
+        });
+    }
 }

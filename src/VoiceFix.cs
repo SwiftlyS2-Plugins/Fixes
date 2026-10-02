@@ -35,13 +35,47 @@ public partial class Fixes
     private ulong GlobalSeed = 0;
     private bool enableVoiceFix = false;
 
-    private void InitVoiceFix()
+    private Guid? voiceDataSendHookId;
+    private Guid? clientVoiceHookId;
+
+    private void SetVoiceFixEnabled(bool enabled)
     {
-        enableVoiceFix = Config.CurrentValue.EnableVoiceFix;
-        Config.OnChange((v, _) =>
+        if (enabled == enableVoiceFix)
         {
-            enableVoiceFix = v.EnableVoiceFix;
-        });
+            return;
+        }
+
+        enableVoiceFix = enabled;
+
+        if (enabled)
+        {
+            EnableVoiceFix();
+            return;
+        }
+
+        DisableVoiceFix();
+    }
+
+    private void EnableVoiceFix()
+    {
+        Core.Event.OnClientConnected += ConnectListener;
+        Core.Event.OnMapLoad += MapLoadListener;
+        Core.Event.OnClientDisconnected += VoiceFixClientDisconnected;
+        voiceDataSendHookId = Core.NetMessage.HookServerMessageInternal<CSVCMsg_VoiceData>(OnVoiceDataSend);
+        clientVoiceHookId = Core.NetMessage.HookClientMessage<CCLCMsg_VoiceData>(OnClientVoice);
+    }
+
+    private void DisableVoiceFix()
+    {
+        Core.NetMessage.Unhook(voiceDataSendHookId!.Value);
+        Core.NetMessage.Unhook(clientVoiceHookId!.Value);
+        Core.Event.OnClientConnected -= ConnectListener;
+        Core.Event.OnMapLoad -= MapLoadListener;
+        Core.Event.OnClientDisconnected -= VoiceFixClientDisconnected;
+        voiceDataSendHookId = null;
+        clientVoiceHookId = null;
+        playerSeeds.Clear();
+        playerVoiceRateLimits.Clear();
     }
 
     private ulong GetSeed()
@@ -59,32 +93,20 @@ public partial class Fixes
         return GlobalSeed;
     }
 
-    [EventListener<EventDelegates.OnClientConnected>]
     void ConnectListener(IOnClientConnectedEvent @event)
     {
-        if (!enableVoiceFix)
-            return;
-
         playerSeeds[@event.PlayerId] = GetSeed();
         playerVoiceRateLimits.TryRemove(@event.PlayerId, out _);
     }
 
-    [EventListener<EventDelegates.OnMapLoad>]
     void MapLoadListener(IOnMapLoadEvent @event)
     {
-        if (!enableVoiceFix)
-            return;
-
         playerSeeds.Clear();
         playerVoiceRateLimits.Clear();
     }
 
-    [ServerNetMessageInternalHandler]
     public HookResult OnVoiceDataSend(CSVCMsg_VoiceData msg, int playerid)
     {
-        if (!enableVoiceFix)
-            return HookResult.Continue;
-
         if (!playerSeeds.TryGetValue(playerid, out var seed))
         {
             seed = GetSeed();
@@ -95,12 +117,8 @@ public partial class Fixes
         return HookResult.Continue;
     }
 
-    [ClientNetMessageHandler]
     public HookResult OnClientVoice(CCLCMsg_VoiceData msg, int playerid)
     {
-        if (!enableVoiceFix)
-            return HookResult.Continue;
-
         if(!msg.Accessor.HasField("audio")) return HookResult.Stop;
 
         var rateLimit = playerVoiceRateLimits.GetOrAdd(playerid, _ => new());
@@ -110,7 +128,6 @@ public partial class Fixes
         return HookResult.Continue;
     }
 
-    [EventListener<EventDelegates.OnClientDisconnected>]
     public void VoiceFixClientDisconnected(IOnClientDisconnectedEvent @event)
     {
         playerVoiceRateLimits.TryRemove(@event.PlayerId, out _);
