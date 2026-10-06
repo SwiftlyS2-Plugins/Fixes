@@ -7,8 +7,6 @@ namespace Fixes;
 
 public partial class Fixes
 {
-    private static List<int> inGameClients = [];
-    private static Lock _inGameClientsLock = new();
     private Guid? fakeMessagesFixHookId;
 
     private void SetFakeMessagesFixEnabled(bool enabled)
@@ -30,15 +28,12 @@ public partial class Fixes
 
     private void EnableFakeMessagesFix()
     {
-        var inGamePlayerIds = GetInGamePlayerIds();
-
-        lock (_inGameClientsLock)
+        foreach (var player in Core.PlayerManager.GetAllPlayers())
         {
-            inGameClients = inGamePlayerIds;
+            player.FixesData.InGame = IsPlayerPutInServer(player);
         }
 
         Core.Event.OnClientPutInServer += OnClientPutInServer;
-        Core.Event.OnClientDisconnected += OnClientDisconnected;
         fakeMessagesFixHookId = Core.Command.HookClientChat(OnClientChat);
     }
 
@@ -46,22 +41,7 @@ public partial class Fixes
     {
         Core.Command.UnhookClientChat(fakeMessagesFixHookId!.Value);
         Core.Event.OnClientPutInServer -= OnClientPutInServer;
-        Core.Event.OnClientDisconnected -= OnClientDisconnected;
         fakeMessagesFixHookId = null;
-
-        lock (_inGameClientsLock)
-        {
-            inGameClients.Clear();
-        }
-    }
-
-    private List<int> GetInGamePlayerIds()
-    {
-        var players = Core.PlayerManager.GetAllPlayers();
-        var inGamePlayers = players.Where(IsPlayerPutInServer);
-        var playerIds = inGamePlayers.Select(player => player.PlayerID);
-
-        return playerIds.ToList();
     }
 
     private static bool IsPlayerPutInServer(IPlayer player)
@@ -75,27 +55,15 @@ public partial class Fixes
     {
         if (playerId == -1) return HookResult.Continue;
 
-        lock (_inGameClientsLock)
-        {
-            if (!inGameClients.Contains(playerId)) return HookResult.Stop;
-        }
+        var player = Core.PlayerManager.GetPlayer(playerId);
+        if (player == null || !player.FixesData.InGame) return HookResult.Stop;
 
         return HookResult.Continue;
     }
 
     public void OnClientPutInServer(IOnClientPutInServerEvent @event)
     {
-        lock (_inGameClientsLock)
-        {
-            inGameClients.Add(@event.PlayerId);
-        }
-    }
-
-    public void OnClientDisconnected(IOnClientDisconnectedEvent @event)
-    {
-        lock (_inGameClientsLock)
-        {
-            inGameClients.Remove(@event.PlayerId);
-        }
+        var player = Core.PlayerManager.GetPlayer(@event.PlayerId);
+        if (player != null) player.FixesData.InGame = true;
     }
 }

@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.SchemaDefinitions;
@@ -27,18 +25,6 @@ public partial class Fixes
 
     private static readonly Vector RampFixEmptyVector = new();
     private Vector[] rampFixOffsetDirections = [];
-
-    // Per-player state, keyed by player slot - mirrors the original's PlayerSlot-indexed arrays.
-    private readonly ConcurrentDictionary<int, Vector> _rampFixLastValidPlaneNormal = new();
-    private readonly ConcurrentDictionary<int, bool> _rampFixDidTpm = new();
-    private readonly ConcurrentDictionary<int, RampFixTpmCandidate> _rampFixTpmCandidate = new();
-
-    private readonly struct RampFixTpmCandidate(bool overrode, Vector origin, Vector velocity)
-    {
-        public readonly bool Overrode = overrode;
-        public readonly Vector Origin = origin;
-        public readonly Vector Velocity = velocity;
-    }
 
     private static Vector[] BuildRampFixOffsetDirections()
     {
@@ -90,7 +76,6 @@ public partial class Fixes
         Core.GameHooks.Movement.TryPlayerMove.Pre += OnRampFixTryPlayerMovePre;
         Core.GameHooks.Movement.TryPlayerMove.Post += OnRampFixTryPlayerMovePost;
         Core.GameHooks.Movement.CategorizePosition.Pre += OnRampFixCategorizePositionPre;
-        Core.Event.OnClientDisconnected += OnRampFixClientDisconnected;
     }
 
     private void DisableRampFix()
@@ -100,33 +85,30 @@ public partial class Fixes
         Core.GameHooks.Movement.TryPlayerMove.Pre -= OnRampFixTryPlayerMovePre;
         Core.GameHooks.Movement.TryPlayerMove.Post -= OnRampFixTryPlayerMovePost;
         Core.GameHooks.Movement.CategorizePosition.Pre -= OnRampFixCategorizePositionPre;
-        Core.Event.OnClientDisconnected -= OnRampFixClientDisconnected;
-        _rampFixLastValidPlaneNormal.Clear();
-        _rampFixDidTpm.Clear();
-        _rampFixTpmCandidate.Clear();
-    }
 
-    public void OnRampFixClientDisconnected(IOnClientDisconnectedEvent @event)
-    {
-        _rampFixLastValidPlaneNormal.TryRemove(@event.PlayerId, out _);
-        _rampFixDidTpm.TryRemove(@event.PlayerId, out _);
-        _rampFixTpmCandidate.TryRemove(@event.PlayerId, out _);
+        foreach (var player in Core.PlayerManager.GetAllPlayers())
+        {
+            var data = player.FixesData;
+            data.RampFixLastValidPlaneNormal = default;
+            data.RampFixDidTpm = false;
+            data.RampFixTpmCandidate = null;
+        }
     }
 
     // Tracks, per tick, whether TryPlayerMove actually ran for this player - if it didn't
     // (dead, invalid pawn, etc.) the tracked ramp-plane state is stale and gets cleared.
     private void OnRampFixProcessMovementPre(ref ProcessMovementMovementPreContext ctx)
     {
-        _rampFixDidTpm[ctx.Params.Player.Slot] = false;
+        ctx.Params.Player.FixesData.RampFixDidTpm = false;
     }
 
     private void OnRampFixProcessMovementPost(ref ProcessMovementMovementPostContext ctx)
     {
-        var slot = ctx.Params.Player.Slot;
+        var data = ctx.Params.Player.FixesData;
 
-        if (!_rampFixDidTpm.TryGetValue(slot, out var didTpm) || !didTpm)
+        if (!data.RampFixDidTpm)
         {
-            _rampFixLastValidPlaneNormal[slot] = RampFixEmptyVector;
+            data.RampFixLastValidPlaneNormal = RampFixEmptyVector;
         }
     }
 
@@ -140,10 +122,10 @@ public partial class Fixes
             return;
         }
 
-        var slot = player.Slot;
+        var data = player.FixesData;
         var mv = ctx.Params.MoveData;
 
-        _rampFixDidTpm[slot] = true;
+        data.RampFixDidTpm = true;
 
         if (mv.Velocity == Vector.Zero)
         {
@@ -153,31 +135,33 @@ public partial class Fixes
         if (!pawn.GroundEntity.IsValid)
         {
             var overrode = RampFixPreTryPlayerMove(pawn,
-                                                   slot,
+                                                   data,
                                                    mv,
                                                    ctx.Params.FirstDest,
                                                    ctx.Params.FirstTrace,
                                                    out var tpmOrigin,
                                                    out var tpmVelocity);
 
-            _rampFixTpmCandidate[slot] = new RampFixTpmCandidate(overrode, tpmOrigin, tpmVelocity);
+            data.RampFixTpmCandidate = new RampFixTpmCandidate(overrode, tpmOrigin, tpmVelocity);
         }
         else
         {
-            _rampFixLastValidPlaneNormal[slot] = RampFixEmptyVector;
+            data.RampFixLastValidPlaneNormal = RampFixEmptyVector;
         }
     }
 
     private void OnRampFixTryPlayerMovePost(ref TryPlayerMoveMovementPostContext ctx)
     {
-        var slot = ctx.Params.Player.Slot;
+        var data = ctx.Params.Player.FixesData;
+        var candidate = data.RampFixTpmCandidate;
+        data.RampFixTpmCandidate = null;
 
-        if (!_rampFixTpmCandidate.TryRemove(slot, out var candidate) || !candidate.Overrode)
+        if (candidate is not { Overrode: true } c)
         {
             return;
         }
 
-        RampFixPostTryPlayerMove(ctx.Params.MoveData, candidate.Origin, candidate.Velocity);
+        RampFixPostTryPlayerMove(ctx.Params.MoveData, c.Origin, c.Velocity);
     }
 
     private static void RampFixPostTryPlayerMove(IMoveData mv, Vector tpmOrigin, Vector tpmVelocity)
@@ -223,10 +207,10 @@ public partial class Fixes
             return;
         }
 
-        var slot = p.Player.Slot;
+        var data = p.Player.FixesData;
+        var lastN = data.RampFixLastValidPlaneNormal;
 
-        if (!_rampFixLastValidPlaneNormal.TryGetValue(slot, out var lastN)
-            || lastN == RampFixEmptyVector
+        if (lastN == RampFixEmptyVector
             || lastN.Z > RampFixGroundPlaneZ)
         {
             return;
@@ -234,7 +218,7 @@ public partial class Fixes
 
         var mv     = p.MoveData;
         var bbox   = RampFixGetBBox(pawn);
-        var params_ = RampFixBuildTraceParams(pawn);
+        var params_ = RampFixGetTraceParams(data, pawn);
 
         var origin       = mv.AbsOrigin;
         var groundOrigin = origin;
@@ -284,17 +268,32 @@ public partial class Fixes
     // Matches the collision-group/interaction-mask combination the original code built via
     // Sharp.Shared's RnQueryShapeAttr.PlayerMovement(...): CollisionGroup.PlayerMovement,
     // the pawn's own InteractsWith mask and hierarchy id, and the pawn itself ignored.
-    private static TraceParams RampFixBuildTraceParams(CCSPlayerPawn pawn)
+    //
+    // TraceParams is expensive to build (builder + several lists, cloned twice), so it is
+    // cached per player and only rebuilt when the pawn or its collision attributes change.
+    private static TraceParams RampFixGetTraceParams(PlayerData data, CCSPlayerPawn pawn)
     {
         var attribute = pawn.Collision!.CollisionAttribute;
+        var interactsWith = attribute.InteractsWith;
+        var hierarchyId = attribute.HierarchyId;
 
-        return TraceParams.Builder()
-                          .WithIterateEntities(true)
-                          .WithCollisionGroup(CollisionGroup.PlayerMovement)
-                          .WithInteraction((MaskTrace) attribute.InteractsWith)
-                          .WithHierarchyIds(attribute.HierarchyId)
-                          .IgnoreEntity(pawn)
-                          .Build();
+        if (!pawn.Equals(data.RampFixTraceParamsPawn)
+            || data.RampFixTraceParamsInteractsWith != interactsWith
+            || data.RampFixTraceParamsHierarchyId != hierarchyId)
+        {
+            data.RampFixTraceParams = TraceParams.Builder()
+                                                 .WithIterateEntities(true)
+                                                 .WithCollisionGroup(CollisionGroup.PlayerMovement)
+                                                 .WithInteraction((MaskTrace) interactsWith)
+                                                 .WithHierarchyIds(hierarchyId)
+                                                 .IgnoreEntity(pawn)
+                                                 .Build();
+            data.RampFixTraceParamsPawn = pawn;
+            data.RampFixTraceParamsInteractsWith = interactsWith;
+            data.RampFixTraceParamsHierarchyId = hierarchyId;
+        }
+
+        return data.RampFixTraceParams;
     }
 
     private static bool RampFixIsTraceBasicallyValid(in TraceResult trace)
@@ -373,7 +372,7 @@ public partial class Fixes
     // pmPlaneNormal - that get overwritten by hand at the same points the original
     // overwrote pm->Fraction/pm->EndPosition/pm->PlaneNormal.
     private bool RampFixPreTryPlayerMove(CCSPlayerPawn pawn,
-                                         int            slot,
+                                         PlayerData     data,
                                          IMoveData      mv,
                                          Vector         firstDest,
                                          TraceResult    firstTrace,
@@ -392,12 +391,12 @@ public partial class Fixes
         var potentiallyStuck = false;
 
         var bbox        = RampFixGetBBox(pawn);
-        var traceParams = RampFixBuildTraceParams(pawn);
+        var traceParams = RampFixGetTraceParams(data, pawn);
 
         var numPlanes = 0;
-        var planes    = new Vector[5];
+        Span<Vector> planes = stackalloc Vector[5];
 
-        var lastPlane = _rampFixLastValidPlaneNormal.GetValueOrDefault(slot, RampFixEmptyVector);
+        var lastPlane = data.RampFixLastValidPlaneNormal;
 
         // The hook rejects grounded pawns before entering this method, and we do not
         // re-enter engine movement code while simulating.
@@ -722,7 +721,7 @@ public partial class Fixes
             }
         }
 
-        _rampFixLastValidPlaneNormal[slot] = lastPlane;
+        data.RampFixLastValidPlaneNormal = lastPlane;
 
         tpmOrigin   = pmEndPosition;
         tpmVelocity = velocity;

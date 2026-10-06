@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Misc;
 
@@ -10,7 +8,6 @@ namespace Fixes;
 public partial class Fixes
 {
     private bool jumpSpamFixEnabled = false;
-    private readonly ConcurrentDictionary<int, int> _lastJumpTick = new();
 
     private void SetJumpSpamFixEnabled(bool enabled)
     {
@@ -36,7 +33,6 @@ public partial class Fixes
         Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre += OnCheckJumpButtonLegacyPre;
         Core.GameHooks.Movement.OnJumpModern.Post += OnJumpModernPost;
         Core.GameHooks.Movement.OnJumpLegacy.Post += OnJumpLegacyPost;
-        Core.Event.OnClientDisconnected += OnJumpSpamFixClientDisconnected;
     }
 
     private void DisableJumpSpamFix()
@@ -45,8 +41,6 @@ public partial class Fixes
         Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre -= OnCheckJumpButtonLegacyPre;
         Core.GameHooks.Movement.OnJumpModern.Post -= OnJumpModernPost;
         Core.GameHooks.Movement.OnJumpLegacy.Post -= OnJumpLegacyPost;
-        Core.Event.OnClientDisconnected -= OnJumpSpamFixClientDisconnected;
-        _lastJumpTick.Clear();
     }
 
     private void OnCheckJumpButtonModernPre(ref CheckJumpButtonModernMovementPreContext ctx)
@@ -55,7 +49,7 @@ public partial class Fixes
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
 
-        if (_lastJumpTick.TryGetValue(player.Slot, out var lastTick) && lastTick == moveData.TickCount)
+        if (player.FixesData.LastJumpTick == moveData.TickCount)
         {
             ctx.SetHookResult(HookResult.CancelOriginal);
         }
@@ -67,7 +61,7 @@ public partial class Fixes
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
 
-        if (_lastJumpTick.TryGetValue(player.Slot, out var lastTick) && lastTick == moveData.TickCount)
+        if (player.FixesData.LastJumpTick == moveData.TickCount)
         {
             ctx.SetHookResult(HookResult.CancelOriginal);
         }
@@ -79,7 +73,7 @@ public partial class Fixes
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
 
-        _lastJumpTick[player.Slot] = moveData.TickCount;
+        player.FixesData.LastJumpTick = moveData.TickCount;
     }
 
     private void OnJumpLegacyPost(ref OnJumpLegacyMovementPostContext ctx)
@@ -88,11 +82,6 @@ public partial class Fixes
         var moveData = ctx.Params.MoveData;
         if (player == null || moveData == null) return;
 
-        _lastJumpTick[player.Slot] = moveData.TickCount;
-    }
-
-    public void OnJumpSpamFixClientDisconnected(IOnClientDisconnectedEvent @event)
-    {
-        _lastJumpTick.TryRemove(@event.PlayerId, out _);
+        player.FixesData.LastJumpTick = moveData.TickCount;
     }
 }

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.Misc;
 using SwiftlyS2.Shared.NetMessages;
@@ -6,32 +5,8 @@ using SwiftlyS2.Shared.ProtobufDefinitions;
 
 namespace Fixes;
 
-internal sealed class VoiceRateLimit
-{
-    private readonly Lock sync = new();
-    private long windowStart = Environment.TickCount64;
-    private int callCount;
-
-    public bool IsExceeded()
-    {
-        lock (sync)
-        {
-            var now = Environment.TickCount64;
-            if (now - windowStart >= 1000)
-            {
-                windowStart = now;
-                callCount = 0;
-            }
-
-            return ++callCount > 128;
-        }
-    }
-}
-
 public partial class Fixes
 {
-    private ConcurrentDictionary<int, ulong> playerSeeds = [];
-    private readonly ConcurrentDictionary<int, VoiceRateLimit> playerVoiceRateLimits = [];
     private ulong GlobalSeed = 0;
     private bool enableVoiceFix = false;
 
@@ -60,7 +35,6 @@ public partial class Fixes
     {
         Core.Event.OnClientConnected += ConnectListener;
         Core.Event.OnMapLoad += MapLoadListener;
-        Core.Event.OnClientDisconnected += VoiceFixClientDisconnected;
         voiceDataSendHookId = Core.NetMessage.HookServerMessageInternal<CSVCMsg_VoiceData>(OnVoiceDataSend);
         clientVoiceHookId = Core.NetMessage.HookClientMessage<CCLCMsg_VoiceData>(OnClientVoice);
     }
@@ -71,11 +45,17 @@ public partial class Fixes
         Core.NetMessage.Unhook(clientVoiceHookId!.Value);
         Core.Event.OnClientConnected -= ConnectListener;
         Core.Event.OnMapLoad -= MapLoadListener;
-        Core.Event.OnClientDisconnected -= VoiceFixClientDisconnected;
         voiceDataSendHookId = null;
         clientVoiceHookId = null;
-        playerSeeds.Clear();
-        playerVoiceRateLimits.Clear();
+        ResetVoiceState();
+    }
+
+    private void ResetVoiceState()
+    {
+        foreach (var player in Core.PlayerManager.GetAllPlayers())
+        {
+            player.FixesData.VoiceSeed = 0;
+        }
     }
 
     private ulong GetSeed()
@@ -95,25 +75,23 @@ public partial class Fixes
 
     void ConnectListener(IOnClientConnectedEvent @event)
     {
-        playerSeeds[@event.PlayerId] = GetSeed();
-        playerVoiceRateLimits.TryRemove(@event.PlayerId, out _);
+        var player = Core.PlayerManager.GetPlayer(@event.PlayerId);
+        if (player == null) return;
+
+        player.FixesData.VoiceSeed = GetSeed();
     }
 
-    void MapLoadListener(IOnMapLoadEvent @event)
-    {
-        playerSeeds.Clear();
-        playerVoiceRateLimits.Clear();
-    }
+    void MapLoadListener(IOnMapLoadEvent @event) => ResetVoiceState();
 
     public HookResult OnVoiceDataSend(CSVCMsg_VoiceData msg, int playerid)
     {
-        if (!playerSeeds.TryGetValue(playerid, out var seed))
-        {
-            seed = GetSeed();
-            playerSeeds[playerid] = seed;
-        }
+        var player = Core.PlayerManager.GetPlayer(playerid);
+        if (player == null) return HookResult.Continue;
 
-        msg.Xuid = seed + (ulong)msg.Entity;
+        var data = player.FixesData;
+        if (data.VoiceSeed == 0) data.VoiceSeed = GetSeed();
+
+        msg.Xuid = data.VoiceSeed + (ulong)msg.Entity;
         return HookResult.Continue;
     }
 
@@ -121,15 +99,6 @@ public partial class Fixes
     {
         if(!msg.Accessor.HasField("audio")) return HookResult.Stop;
 
-        var rateLimit = playerVoiceRateLimits.GetOrAdd(playerid, _ => new());
-        if (rateLimit.IsExceeded())
-            return HookResult.Stop;
-
         return HookResult.Continue;
-    }
-
-    public void VoiceFixClientDisconnected(IOnClientDisconnectedEvent @event)
-    {
-        playerVoiceRateLimits.TryRemove(@event.PlayerId, out _);
     }
 }
