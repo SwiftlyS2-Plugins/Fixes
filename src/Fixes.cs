@@ -45,6 +45,7 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
     private void ApplyFixes(FixesConfig config)
     {
         SetSteamBanFixEnabled(config.EnableSteamBanFix);
+        SetCompetitiveCooldownFixEnabled(config.EnableCompetitiveCooldownFix);
         SetInputActivatorCrashFixEnabled(config.EnableInputActivatorCrashFix);
         SetTeamLimitFixEnabled(config.EnableTeamLimitFix);
         SetBlankMapFixEnabled(config.EnableBlankMapFix);
@@ -53,6 +54,7 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
         SetFakeMessagesFixEnabled(config.EnableFakeMessagesFix);
         SetJumpSpamFixEnabled(config.EnableJumpSpamFix);
         SetRampFixEnabled(config.EnableRampFix);
+        SetPlayerGhostFixEnabled(config.EnablePlayerGhostFix);
     }
 
     public override void Unload()
