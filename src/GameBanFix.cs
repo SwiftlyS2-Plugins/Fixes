@@ -40,18 +40,26 @@ public partial class Fixes
         steamBanFixHookId = null;
     }
 
-    private void EnableSteamBanFix()
+    // Shared with CompetitiveCooldownFix - both hook CheckSteamBan and read the same ban map.
+    private void EnsureGcBanInfoResolved()
     {
-        if (_CheckSteamBanDelegate == null)
+        if (_CheckSteamBanDelegate != null)
         {
-            var checkSteamBanAddress = Core.GameData.GetSignature("CheckSteamBan");
-            var gcBanInfoSignature = Core.GameData.GetSignature("CCSGameRules::m_mapGcBanInformation");
-
-            _CheckSteamBanDelegate = Core.Memory.GetUnmanagedFunctionByAddress<CheckSteamBanDelegate>(checkSteamBanAddress);
-            addressGCBanInfo = Core.Memory.ResolveXrefAddress(gcBanInfoSignature);
+            return;
         }
 
-        steamBanFixHookId = _CheckSteamBanDelegate.AddHook(next =>
+        var checkSteamBanAddress = Core.GameData.GetSignature("CheckSteamBan");
+        var gcBanInfoSignature = Core.GameData.GetSignature("CCSGameRules::m_mapGcBanInformation");
+
+        _CheckSteamBanDelegate = Core.Memory.GetUnmanagedFunctionByAddress<CheckSteamBanDelegate>(checkSteamBanAddress);
+        addressGCBanInfo = Core.Memory.ResolveXrefAddress(gcBanInfoSignature);
+    }
+
+    private void EnableSteamBanFix()
+    {
+        EnsureGcBanInfoResolved();
+
+        steamBanFixHookId = _CheckSteamBanDelegate!.AddHook(next =>
         {
             unsafe
             {

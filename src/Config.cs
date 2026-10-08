@@ -11,4 +11,6 @@ public class FixesConfig
     public bool EnableFakeMessagesFix { get; set; } = true;
     public bool EnableJumpSpamFix { get; set; } = true;
     public bool EnableRampFix { get; set; } = false;
+    public bool EnablePlayerGhostFix { get; set; } = true;
+    public bool EnableCompetitiveCooldownFix { get; set; } = false;
 }
