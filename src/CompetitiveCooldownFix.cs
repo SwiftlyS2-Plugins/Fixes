@@ -5,8 +5,6 @@ namespace Fixes;
 
 public partial class Fixes
 {
-    // GC penalty reasons that mean "competitive cooldown", taken from CS2Fixes' CheckSteamBan
-    // detour. These are not the ENetworkDisconnectionReason kick codes.
     private static readonly uint[] CompetitiveCooldownReasons = [20, 22, 23];
 
     private Guid? competitiveCooldownFixHookId;
@@ -39,8 +37,6 @@ public partial class Fixes
             {
                 return () =>
                 {
-                    // Must run before the original: that is what kicks, so clearing afterwards
-                    // would only tidy up after a player who has already been dropped.
                     ClearCompetitiveCooldowns();
                     next()();
                 };
@@ -57,9 +53,8 @@ public partial class Fixes
             return;
         }
 
-        var cooldownKeys = new List<uint>();
+        var cooldownIndices = new List<uint>();
 
-        // Bounded by Count as insurance - this walks a native tree on the game thread.
         var remaining = gcBanInfoMap.Count;
         for (var i = gcBanInfoMap.FirstInOrdered();
              gcBanInfoMap.IsValidIndex(i) && remaining-- > 0;
@@ -67,14 +62,13 @@ public partial class Fixes
         {
             if (Array.IndexOf(CompetitiveCooldownReasons, gcBanInfoMap[i].Reason) >= 0)
             {
-                cooldownKeys.Add(gcBanInfoMap.Key(i));
+                cooldownIndices.Add(i);
             }
         }
 
-        // Removing inside the walk above would invalidate the iteration.
-        foreach (var key in cooldownKeys)
+        foreach (var index in cooldownIndices)
         {
-            gcBanInfoMap.Remove(key);
+            gcBanInfoMap.RemoveAt(index);
         }
     }
 }
