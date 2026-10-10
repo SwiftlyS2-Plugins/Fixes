@@ -32,6 +32,7 @@ into one place, each one individually switchable.
 | Jump macro abuse | `EnableJumpSpamFix` | On |
 | Ramp bug | `EnableRampFix` | Off |
 | Ghost players | `EnablePlayerGhostFix` | On |
+| CSTV removed by bot quota | `EnableCstvBotQuotaFix` | Off |
 
 ## What each fix does
 
@@ -112,6 +113,15 @@ map, letting them walk around and kill people who have no way to fight back.
 This fix clears the leftover body at the start of each round, putting the
 player properly into spectate.
 
+### CSTV removed by bot quota
+
+Automatic bot quota management (`bot_quota_mode = fill`) can select the in-game SourceTV client for
+removal, interrupting demo recording and preventing later recordings from
+starting normally. This fix excludes HLTV controllers only while the engine
+selects a bot to remove, allowing it to continue to an ordinary bot.
+
+Bot settings, explicit kicks and normal map/server shutdown remain unchanged.
+
 ## Configuration
 
 Settings live in the plugin's `config.jsonc`:
@@ -129,7 +139,8 @@ Settings live in the plugin's `config.jsonc`:
     "EnableFakeMessagesFix": true,
     "EnableJumpSpamFix": true,
     "EnableRampFix": false,
-    "EnablePlayerGhostFix": true
+    "EnablePlayerGhostFix": true,
+    "EnableCstvBotQuotaFix": false
   }
 }
 ```
