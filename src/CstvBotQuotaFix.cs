@@ -45,6 +45,8 @@ public partial class Fixes
     {
         try
         {
+            // SelectAndKickBot: hook to limit HLTV filtering to bot removal on this thread.
+            // TeamCandidate: hook to reject HLTV candidates and let selection continue.
             if (!Core.GameData.TryGetSignature("CstvBotQuotaFix::SelectAndKickBot", out var selectionAddress)
                 || !Core.GameData.TryGetSignature("CstvBotQuotaFix::TeamCandidate", out var candidateAddress)
                 || selectionAddress == 0 || candidateAddress == 0 || selectionAddress == candidateAddress)
@@ -57,9 +59,8 @@ public partial class Fixes
             {
                 try
                 {
-                    // The quota selector can choose a pawn-less HLTV client as a bot.
-                    // This predicate is shared: only filter inside selection on this thread,
-                    // so the engine continues looking for an ordinary bot to remove.
+                    // The quota selector can mistake a pawn-less HLTV client for a bot.
+                    // Reject it here so the iterator can continue looking for an ordinary bot.
                     if (cstvQuotaActive && cstvSelectionDepth > 0 && controller != 0
                         && Core.Memory.ToSchemaClass<CCSPlayerController>(controller).IsHLTV)
                     {
@@ -86,6 +87,7 @@ public partial class Fixes
             cstvSelectAndKickBot = Core.Memory.GetUnmanagedFunctionByAddress<CstvSelectAndKickBotDelegate>(selectionAddress);
             var selectionHookId = cstvSelectAndKickBot.AddHook(next => team =>
             {
+                // TeamCandidate is shared; limit its HLTV filter to bot selection on this thread.
                 ++cstvSelectionDepth;
                 try
                 {
