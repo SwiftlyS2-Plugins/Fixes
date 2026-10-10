@@ -55,6 +55,7 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
         SetJumpSpamFixEnabled(config.EnableJumpSpamFix);
         SetRampFixEnabled(config.EnableRampFix);
         SetPlayerGhostFixEnabled(config.EnablePlayerGhostFix);
+        SetCstvBotQuotaFixEnabled(config.EnableCstvBotQuotaFix);
     }
 
     public override void Unload()
