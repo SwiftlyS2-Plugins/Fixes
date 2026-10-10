@@ -57,7 +57,7 @@ public partial class Fixes
             return;
         }
 
-        var cooldownKeys = new List<uint>();
+        var cooldownIndices = new List<uint>();
 
         // Bounded by Count as insurance - this walks a native tree on the game thread.
         var remaining = gcBanInfoMap.Count;
@@ -67,14 +67,17 @@ public partial class Fixes
         {
             if (Array.IndexOf(CompetitiveCooldownReasons, gcBanInfoMap[i].Reason) >= 0)
             {
-                cooldownKeys.Add(gcBanInfoMap.Key(i));
+                cooldownIndices.Add(i);
             }
         }
 
-        // Removing inside the walk above would invalidate the iteration.
-        foreach (var key in cooldownKeys)
+        // Indices, not keys: Remove(key) goes through CUtlRBTree.Find, which calls the tree's
+        // LFunc - a pointer SwiftlyS2 sets only on trees it allocated itself, so on this
+        // game-owned map it is a wild call that crashes the server. RemoveAt is link arithmetic.
+        // Indices survive removals, but freeing a node breaks NextInOrdered, hence the two passes.
+        foreach (var index in cooldownIndices)
         {
-            gcBanInfoMap.Remove(key);
+            gcBanInfoMap.RemoveAt(index);
         }
     }
 }
