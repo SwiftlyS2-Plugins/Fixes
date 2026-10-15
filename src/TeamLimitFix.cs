@@ -34,9 +34,11 @@ public partial class Fixes
         {
             gameRules.NumSpawnableTerrorist = maxPlayers;
             gameRules.MaxNumTerrorists = maxPlayers;
+            gameRules.SpawnPointCount_Terrorist = maxPlayers;
             
             gameRules.NumSpawnableCT = maxPlayers;
             gameRules.MaxNumCTs = maxPlayers;
+            gameRules.SpawnPointCount_CT = maxPlayers;
         }
 
         return HookResult.Continue;
