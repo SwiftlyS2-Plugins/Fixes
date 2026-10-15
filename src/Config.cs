@@ -13,4 +13,5 @@ public class FixesConfig
     public bool EnableRampFix { get; set; } = false;
     public bool EnablePlayerGhostFix { get; set; } = true;
     public bool EnableCompetitiveCooldownFix { get; set; } = false;
+    public bool EnableCstvBotQuotaFix { get; set; } = false;
 }
