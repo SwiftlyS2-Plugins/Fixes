@@ -2,7 +2,6 @@ using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using SwiftlyS2.Shared.Trace;
-using SwiftlyS2.Shared.Convars;
 
 namespace Fixes;
 
@@ -11,9 +10,6 @@ namespace Fixes;
 public partial class Fixes
 {
     private bool rampFixEnabled;
-    private IConVar<int>? rampFixSolidTeammates;
-    private IConVar<int>? rampFixSolidEnemies;
-    private IConVar<bool>? rampFixTeammatesAreEnemies;
 
     private const float RampFixBugThreshold = 0.98f;
     private const float RampFixGroundPlaneZ = 0.7f;
@@ -70,9 +66,7 @@ public partial class Fixes
 
     private void EnableRampFix()
     {
-        rampFixSolidTeammates = Core.ConVar.Find<int>("mp_solid_teammates");
-        rampFixSolidEnemies = Core.ConVar.Find<int>("mp_solid_enemies");
-        rampFixTeammatesAreEnemies = Core.ConVar.Find<bool>("mp_teammates_are_enemies");
+        StartRampFixConVarCache();
         if (rampFixOffsetDirections.Length == 0)
         {
             rampFixOffsetDirections = BuildRampFixOffsetDirections();
@@ -87,6 +81,7 @@ public partial class Fixes
 
     private void DisableRampFix()
     {
+        StopRampFixConVarCache();
         Core.GameHooks.Movement.ProcessMovement.Pre -= OnRampFixProcessMovementPre;
         Core.GameHooks.Movement.ProcessMovement.Post -= OnRampFixProcessMovementPost;
         Core.GameHooks.Movement.TryPlayerMove.Pre -= OnRampFixTryPlayerMovePre;
@@ -282,9 +277,9 @@ public partial class Fixes
         var attribute = pawn.Collision!.CollisionAttribute;
         var policy = new RampFixTracePolicy(attribute.InteractsWith, attribute.InteractsExclude,
             attribute.InteractsAs, attribute.HierarchyId,
-            RampFixTracePolicy.TransparentPlayers(rampFixSolidTeammates?.Value),
-            RampFixTracePolicy.TransparentPlayers(rampFixSolidEnemies?.Value),
-            rampFixTeammatesAreEnemies?.Value ?? false);
+            RampFixTracePolicy.TransparentPlayers(rampFixSolidTeammatesValue),
+            RampFixTracePolicy.TransparentPlayers(rampFixSolidEnemiesValue),
+            rampFixTeammatesAreEnemiesValue);
 
         if (!pawn.Equals(data.RampFixTraceParamsPawn)
             || data.RampFixTracePolicy != policy)

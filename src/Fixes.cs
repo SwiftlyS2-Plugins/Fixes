@@ -60,5 +60,6 @@ public partial class Fixes(ISwiftlyCore core) : BasePlugin(core)
 
     public override void Unload()
     {
+        StopRampFixConVarCache();
     }
 }
