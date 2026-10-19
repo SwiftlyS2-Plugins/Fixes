@@ -66,6 +66,7 @@ public partial class Fixes
 
     private void EnableRampFix()
     {
+        StartRampFixConVarCache();
         if (rampFixOffsetDirections.Length == 0)
         {
             rampFixOffsetDirections = BuildRampFixOffsetDirections();
@@ -80,6 +81,7 @@ public partial class Fixes
 
     private void DisableRampFix()
     {
+        StopRampFixConVarCache();
         Core.GameHooks.Movement.ProcessMovement.Pre -= OnRampFixProcessMovementPre;
         Core.GameHooks.Movement.ProcessMovement.Post -= OnRampFixProcessMovementPost;
         Core.GameHooks.Movement.TryPlayerMove.Pre -= OnRampFixTryPlayerMovePre;
@@ -265,32 +267,28 @@ public partial class Fixes
         };
     }
 
-    // Matches the collision-group/interaction-mask combination the original code built via
-    // Sharp.Shared's RnQueryShapeAttr.PlayerMovement(...): CollisionGroup.PlayerMovement,
-    // the pawn's own InteractsWith mask and hierarchy id, and the pawn itself ignored.
+    // Keep the full pawn interaction policy. A generic movement trace does not
+    // apply teammate/enemy solidity game rules, so filter those players explicitly.
     //
     // TraceParams is expensive to build (builder + several lists, cloned twice), so it is
     // cached per player and only rebuilt when the pawn or its collision attributes change.
-    private static TraceParams RampFixGetTraceParams(PlayerData data, CCSPlayerPawn pawn)
+    private TraceParams RampFixGetTraceParams(PlayerData data, CCSPlayerPawn pawn)
     {
         var attribute = pawn.Collision!.CollisionAttribute;
-        var interactsWith = attribute.InteractsWith;
-        var hierarchyId = attribute.HierarchyId;
+        var policy = new RampFixTracePolicy(attribute.InteractsWith, attribute.InteractsExclude,
+            attribute.InteractsAs, attribute.HierarchyId,
+            RampFixTracePolicy.TransparentPlayers(rampFixSolidTeammatesValue),
+            RampFixTracePolicy.TransparentPlayers(rampFixSolidEnemiesValue),
+            rampFixTeammatesAreEnemiesValue);
 
         if (!pawn.Equals(data.RampFixTraceParamsPawn)
-            || data.RampFixTraceParamsInteractsWith != interactsWith
-            || data.RampFixTraceParamsHierarchyId != hierarchyId)
+            || data.RampFixTracePolicy != policy)
         {
-            data.RampFixTraceParams = TraceParams.Builder()
-                                                 .WithIterateEntities(true)
-                                                 .WithCollisionGroup(CollisionGroup.PlayerMovement)
-                                                 .WithInteraction((MaskTrace) interactsWith)
-                                                 .WithHierarchyIds(hierarchyId)
-                                                 .IgnoreEntity(pawn)
-                                                 .Build();
+            data.RampFixTraceParams = policy.Build(pawn);
             data.RampFixTraceParamsPawn = pawn;
-            data.RampFixTraceParamsInteractsWith = interactsWith;
-            data.RampFixTraceParamsHierarchyId = hierarchyId;
+            data.RampFixTracePolicy = policy;
+            data.RampFixLastValidPlaneNormal = default;
+            data.RampFixTpmCandidate = null;
         }
 
         return data.RampFixTraceParams;
@@ -419,7 +417,7 @@ public partial class Fixes
 
             Vector pmN;
 
-            if (end == firstDest)
+            if (end == firstDest && data.RampFixTracePolicy!.Value.ShouldHitEntity(pawn, firstTrace.Entity))
             {
                 pmPlaneNormal = firstTrace.HitNormal;
                 pmFraction    = firstTrace.Fraction;

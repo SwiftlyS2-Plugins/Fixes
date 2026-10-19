@@ -27,8 +27,7 @@ internal sealed class PlayerData
 
     public TraceParams RampFixTraceParams;
     public CCSPlayerPawn? RampFixTraceParamsPawn;
-    public ulong RampFixTraceParamsInteractsWith;
-    public ushort RampFixTraceParamsHierarchyId;
+    public RampFixTracePolicy? RampFixTracePolicy;
 }
 
 internal static class PlayerExtensions
