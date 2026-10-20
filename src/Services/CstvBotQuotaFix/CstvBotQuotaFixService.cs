@@ -1,12 +1,15 @@
 using System.Runtime.InteropServices;
+using Fixes.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.Memory;
 using SwiftlyS2.Shared.SchemaDefinitions;
 
-namespace Fixes;
+namespace Fixes.Services.CstvBotQuotaFix;
 
-public partial class Fixes
+internal class CstvBotQuotaFixService : IDisposable
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate byte CstvSelectAndKickBotDelegate(int team);
@@ -15,6 +18,9 @@ public partial class Fixes
 
     [ThreadStatic]
     private static int cstvSelectionDepth;
+
+    private readonly ISwiftlyCore _core;
+    private readonly IDisposable? _configChangeSubscription;
     private IUnmanagedFunction<CstvSelectAndKickBotDelegate>? cstvSelectAndKickBot;
     private IUnmanagedFunction<CstvTeamCandidateDelegate>? cstvTeamCandidate;
     private Guid? cstvSelectionHookId;
@@ -24,7 +30,20 @@ public partial class Fixes
     private int cstvReportedSkip;
     private long cstvNextErrorLogAt;
 
-    private void SetCstvBotQuotaFixEnabled(bool enabled)
+    public CstvBotQuotaFixService(ISwiftlyCore core, IOptionsMonitor<Configuration> config)
+    {
+        _core = core;
+        SetEnabled(config.CurrentValue.EnableCstvBotQuotaFix);
+        _configChangeSubscription = config.OnChange(cfg => _core.Scheduler.NextTick(() => SetEnabled(cfg.EnableCstvBotQuotaFix)));
+    }
+
+    public void Dispose()
+    {
+        _configChangeSubscription?.Dispose();
+        SetEnabled(false);
+    }
+
+    private void SetEnabled(bool enabled)
     {
         var isEnabled = cstvSelectionHookId.HasValue && cstvCandidateHookId.HasValue;
         if (enabled == isEnabled)
@@ -47,14 +66,14 @@ public partial class Fixes
         {
             // SelectAndKickBot: hook to limit HLTV filtering to bot removal on this thread.
             // TeamCandidate: hook to reject HLTV candidates and let selection continue.
-            if (!Core.GameData.TryGetSignature("CstvBotQuotaFix::SelectAndKickBot", out var selectionAddress)
-                || !Core.GameData.TryGetSignature("CstvBotQuotaFix::TeamCandidate", out var candidateAddress)
+            if (!_core.GameData.TryGetSignature("CstvBotQuotaFix::SelectAndKickBot", out var selectionAddress)
+                || !_core.GameData.TryGetSignature("CstvBotQuotaFix::TeamCandidate", out var candidateAddress)
                 || selectionAddress == 0 || candidateAddress == 0 || selectionAddress == candidateAddress)
             {
                 throw new InvalidOperationException("CSTV quota gamedata is missing or invalid.");
             }
 
-            cstvTeamCandidate = Core.Memory.GetUnmanagedFunctionByAddress<CstvTeamCandidateDelegate>(candidateAddress);
+            cstvTeamCandidate = _core.Memory.GetUnmanagedFunctionByAddress<CstvTeamCandidateDelegate>(candidateAddress);
             var candidateHookId = cstvTeamCandidate.AddHook(next => (filter, controller, pawn) =>
             {
                 try
@@ -62,11 +81,11 @@ public partial class Fixes
                     // The quota selector can mistake a pawn-less HLTV client for a bot.
                     // Reject it here so the iterator can continue looking for an ordinary bot.
                     if (cstvQuotaActive && cstvSelectionDepth > 0 && controller != 0
-                        && Core.Memory.ToSchemaClass<CCSPlayerController>(controller).IsHLTV)
+                        && _core.Memory.ToSchemaClass<CCSPlayerController>(controller).IsHLTV)
                     {
                         if (Interlocked.Exchange(ref cstvReportedSkip, 1) == 0)
                         {
-                            Core.Logger.LogInformation("CSTV quota fix skipped HLTV during native bot removal (first occurrence this map).");
+                            _core.Logger.LogInformation("CSTV quota fix skipped HLTV during native bot removal (first occurrence this map).");
                         }
                         return 0;
                     }
@@ -84,7 +103,7 @@ public partial class Fixes
             }
             cstvCandidateHookId = candidateHookId;
 
-            cstvSelectAndKickBot = Core.Memory.GetUnmanagedFunctionByAddress<CstvSelectAndKickBotDelegate>(selectionAddress);
+            cstvSelectAndKickBot = _core.Memory.GetUnmanagedFunctionByAddress<CstvSelectAndKickBotDelegate>(selectionAddress);
             var selectionHookId = cstvSelectAndKickBot.AddHook(next => team =>
             {
                 // TeamCandidate is shared; limit its HLTV filter to bot selection on this thread.
@@ -109,17 +128,17 @@ public partial class Fixes
             }
             cstvSelectionHookId = selectionHookId;
 
-            Core.Event.OnMapLoad += OnCstvQuotaMapLoad;
-            Core.Event.OnMapUnload += OnCstvQuotaMapUnload;
+            _core.Event.OnMapLoad += OnCstvQuotaMapLoad;
+            _core.Event.OnMapUnload += OnCstvQuotaMapUnload;
             cstvMapEventsSubscribed = true;
             Interlocked.Exchange(ref cstvReportedSkip, 0);
             cstvQuotaActive = true;
-            Core.Logger.LogInformation("CSTV quota fix enabled: selection={Selection:X}, candidate={Candidate:X}. Bot settings are unchanged.", selectionAddress, candidateAddress);
+            _core.Logger.LogInformation("CSTV quota fix enabled: selection={Selection:X}, candidate={Candidate:X}. Bot settings are unchanged.", selectionAddress, candidateAddress);
         }
         catch (Exception ex)
         {
             DisableCstvBotQuotaFix();
-            Core.Logger.LogError(ex, "CSTV quota fix unavailable. Check the Fixes plugin gamedata; automatic bot removal may disconnect SourceTV.");
+            _core.Logger.LogError(ex, "CSTV quota fix unavailable. Check the Fixes plugin gamedata; automatic bot removal may disconnect SourceTV.");
         }
     }
 
@@ -128,8 +147,8 @@ public partial class Fixes
         cstvQuotaActive = false;
         if (cstvMapEventsSubscribed)
         {
-            Core.Event.OnMapLoad -= OnCstvQuotaMapLoad;
-            Core.Event.OnMapUnload -= OnCstvQuotaMapUnload;
+            _core.Event.OnMapLoad -= OnCstvQuotaMapLoad;
+            _core.Event.OnMapUnload -= OnCstvQuotaMapUnload;
             cstvMapEventsSubscribed = false;
         }
 
@@ -166,7 +185,7 @@ public partial class Fixes
         var next = Interlocked.Read(ref cstvNextErrorLogAt);
         if (now >= next && Interlocked.CompareExchange(ref cstvNextErrorLogAt, now + 30_000, next) == next)
         {
-            Core.Logger.LogError(ex, "CSTV quota fix callback failed; returning false (limited to once per 30 seconds).");
+            _core.Logger.LogError(ex, "CSTV quota fix callback failed; returning false (limited to once per 30 seconds).");
         }
     }
 }

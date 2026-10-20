@@ -1,14 +1,19 @@
+using Fixes.Models;
+using Microsoft.Extensions.Options;
+using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using SwiftlyS2.Shared.Trace;
 
-namespace Fixes;
+namespace Fixes.Services.RampFix;
 
 // Ported from zer0.k's RampFix (originally written for ModSharp by Nukoooo) to SwiftlyS2.
 
-public partial class Fixes
+internal partial class RampFixService : IDisposable
 {
+    private readonly ISwiftlyCore _core;
+    private readonly IDisposable? _configChangeSubscription;
     private bool rampFixEnabled;
 
     private const float RampFixBugThreshold = 0.98f;
@@ -46,7 +51,20 @@ public partial class Fixes
         return dirs;
     }
 
-    private void SetRampFixEnabled(bool enabled)
+    public RampFixService(ISwiftlyCore core, IOptionsMonitor<Configuration> config)
+    {
+        _core = core;
+        SetEnabled(config.CurrentValue.EnableRampFix);
+        _configChangeSubscription = config.OnChange(cfg => _core.Scheduler.NextTick(() => SetEnabled(cfg.EnableRampFix)));
+    }
+
+    public void Dispose()
+    {
+        _configChangeSubscription?.Dispose();
+        SetEnabled(false);
+    }
+
+    private void SetEnabled(bool enabled)
     {
         if (enabled == rampFixEnabled)
         {
@@ -72,23 +90,23 @@ public partial class Fixes
             rampFixOffsetDirections = BuildRampFixOffsetDirections();
         }
 
-        Core.GameHooks.Movement.ProcessMovement.Pre += OnRampFixProcessMovementPre;
-        Core.GameHooks.Movement.ProcessMovement.Post += OnRampFixProcessMovementPost;
-        Core.GameHooks.Movement.TryPlayerMove.Pre += OnRampFixTryPlayerMovePre;
-        Core.GameHooks.Movement.TryPlayerMove.Post += OnRampFixTryPlayerMovePost;
-        Core.GameHooks.Movement.CategorizePosition.Pre += OnRampFixCategorizePositionPre;
+        _core.GameHooks.Movement.ProcessMovement.Pre += OnRampFixProcessMovementPre;
+        _core.GameHooks.Movement.ProcessMovement.Post += OnRampFixProcessMovementPost;
+        _core.GameHooks.Movement.TryPlayerMove.Pre += OnRampFixTryPlayerMovePre;
+        _core.GameHooks.Movement.TryPlayerMove.Post += OnRampFixTryPlayerMovePost;
+        _core.GameHooks.Movement.CategorizePosition.Pre += OnRampFixCategorizePositionPre;
     }
 
     private void DisableRampFix()
     {
         StopRampFixConVarCache();
-        Core.GameHooks.Movement.ProcessMovement.Pre -= OnRampFixProcessMovementPre;
-        Core.GameHooks.Movement.ProcessMovement.Post -= OnRampFixProcessMovementPost;
-        Core.GameHooks.Movement.TryPlayerMove.Pre -= OnRampFixTryPlayerMovePre;
-        Core.GameHooks.Movement.TryPlayerMove.Post -= OnRampFixTryPlayerMovePost;
-        Core.GameHooks.Movement.CategorizePosition.Pre -= OnRampFixCategorizePositionPre;
+        _core.GameHooks.Movement.ProcessMovement.Pre -= OnRampFixProcessMovementPre;
+        _core.GameHooks.Movement.ProcessMovement.Post -= OnRampFixProcessMovementPost;
+        _core.GameHooks.Movement.TryPlayerMove.Pre -= OnRampFixTryPlayerMovePre;
+        _core.GameHooks.Movement.TryPlayerMove.Post -= OnRampFixTryPlayerMovePost;
+        _core.GameHooks.Movement.CategorizePosition.Pre -= OnRampFixCategorizePositionPre;
 
-        foreach (var player in Core.PlayerManager.GetAllPlayers())
+        foreach (var player in _core.PlayerManager.GetAllPlayers())
         {
             var data = player.FixesData;
             data.RampFixLastValidPlaneNormal = default;
@@ -226,7 +244,7 @@ public partial class Fixes
         var groundOrigin = origin;
         groundOrigin.Z -= 2.0f;
 
-        var trace = Core.Trace.TracePlayerBBox(origin, groundOrigin, bbox, params_);
+        var trace = _core.Trace.TracePlayerBBox(origin, groundOrigin, bbox, params_);
 
         if (MathF.Abs(trace.Fraction - 1.0f) < RampFixFltEpsilon)
         {
@@ -241,7 +259,7 @@ public partial class Fixes
             groundOrigin   =  origin;
             groundOrigin.Z -= 2.0f;
 
-            trace = Core.Trace.TracePlayerBBox(origin, groundOrigin, bbox, params_);
+            trace = _core.Trace.TracePlayerBBox(origin, groundOrigin, bbox, params_);
 
             if (trace.StartInSolid)
             {
@@ -322,14 +340,14 @@ public partial class Fixes
     // The expensive half: two extra traces verifying the end position isn't stuck.
     private bool RampFixVerifyTraceEndNotStuck(in TraceResult trace, in BBox_t bbox, in TraceParams traceParams)
     {
-        var stuck = Core.Trace.TracePlayerBBox(trace.EndPos, trace.EndPos, bbox, traceParams);
+        var stuck = _core.Trace.TracePlayerBBox(trace.EndPos, trace.EndPos, bbox, traceParams);
 
         if (stuck.StartInSolid || stuck.Fraction < 1.0f - RampFixFltEpsilon)
         {
             return false;
         }
 
-        stuck = Core.Trace.TracePlayerBBox(trace.EndPos, trace.StartPos, bbox, traceParams);
+        stuck = _core.Trace.TracePlayerBBox(trace.EndPos, trace.StartPos, bbox, traceParams);
 
         return !stuck.StartInSolid;
     }
@@ -377,7 +395,7 @@ public partial class Fixes
                                          out Vector     tpmOrigin,
                                          out Vector     tpmVelocity)
     {
-        var frameTime = Core.Engine.GlobalVars.FrameTime;
+        var frameTime = _core.Engine.GlobalVars.FrameTime;
         var timeLeft  = frameTime;
         var start     = mv.AbsOrigin;
 
@@ -426,7 +444,7 @@ public partial class Fixes
             }
             else
             {
-                var pmTrace = Core.Trace.TracePlayerBBox(start, end, bbox, traceParams);
+                var pmTrace = _core.Trace.TracePlayerBBox(start, end, bbox, traceParams);
 
                 pmPlaneNormal = pmTrace.HitNormal;
                 pmFraction    = pmTrace.Fraction;
@@ -492,7 +510,7 @@ public partial class Fixes
                             }
 
                             var testStart = start + (offsetDirection * RampFixPierceDistance);
-                            var probe      = Core.Trace.TracePlayerBBox(testStart, start, bbox, traceParams);
+                            var probe      = _core.Trace.TracePlayerBBox(testStart, start, bbox, traceParams);
 
                             if (!RampFixIsValidMovementTrace(probe, bbox, traceParams))
                             {
@@ -512,7 +530,7 @@ public partial class Fixes
                             var ratioStart   = start + pierceOffset;
                             var ratioEnd     = end   + pierceOffset;
 
-                            pierce = Core.Trace.TracePlayerBBox(ratioStart, ratioEnd, bbox, traceParams);
+                            pierce = _core.Trace.TracePlayerBBox(ratioStart, ratioEnd, bbox, traceParams);
 
                             // Cheap, trace-free checks first...
                             if (!RampFixIsTraceBasicallyValid(pierce))
@@ -574,7 +592,7 @@ public partial class Fixes
 
                         if (goodTrace || hitNewPlane)
                         {
-                            var confirm = Core.Trace.TracePlayerBBox(pierce.EndPos, end, bbox, traceParams);
+                            var confirm = _core.Trace.TracePlayerBBox(pierce.EndPos, end, bbox, traceParams);
 
                             if (!RampFixIsValidMovementTrace(confirm, bbox, traceParams))
                             {

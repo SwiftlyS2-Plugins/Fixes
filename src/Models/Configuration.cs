@@ -1,6 +1,6 @@
-namespace Fixes;
+namespace Fixes.Models;
 
-public class FixesConfig
+public class Configuration
 {
     public bool EnableSteamBanFix { get; set; } = true;
     public bool EnableInputActivatorCrashFix { get; set; } = true;

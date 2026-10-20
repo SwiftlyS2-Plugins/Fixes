@@ -1,9 +1,9 @@
 using SwiftlyS2.Shared.Convars;
 using SwiftlyS2.Shared.Events;
 
-namespace Fixes;
+namespace Fixes.Services.RampFix;
 
-public partial class Fixes
+internal partial class RampFixService
 {
     private IConVar<int>? rampFixSolidTeammates;
     private IConVar<int>? rampFixSolidEnemies;
@@ -16,10 +16,10 @@ public partial class Fixes
     private void StartRampFixConVarCache()
     {
         if (rampFixConVarCacheSubscribed) return;
-        rampFixSolidTeammates = Core.ConVar.Find<int>("mp_solid_teammates");
-        rampFixSolidEnemies = Core.ConVar.Find<int>("mp_solid_enemies");
-        rampFixTeammatesAreEnemies = Core.ConVar.Find<bool>("mp_teammates_are_enemies");
-        Core.Event.OnConVarValueChanged += OnRampFixConVarValueChanged;
+        rampFixSolidTeammates = _core.ConVar.Find<int>("mp_solid_teammates");
+        rampFixSolidEnemies = _core.ConVar.Find<int>("mp_solid_enemies");
+        rampFixTeammatesAreEnemies = _core.ConVar.Find<bool>("mp_teammates_are_enemies");
+        _core.Event.OnConVarValueChanged += OnRampFixConVarValueChanged;
         rampFixConVarCacheSubscribed = true;
         rampFixSolidTeammatesValue = rampFixSolidTeammates?.Value;
         rampFixSolidEnemiesValue = rampFixSolidEnemies?.Value;
@@ -47,7 +47,7 @@ public partial class Fixes
     private void StopRampFixConVarCache()
     {
         if (!rampFixConVarCacheSubscribed) return;
-        Core.Event.OnConVarValueChanged -= OnRampFixConVarValueChanged;
+        _core.Event.OnConVarValueChanged -= OnRampFixConVarValueChanged;
         rampFixConVarCacheSubscribed = false;
         rampFixSolidTeammates = null;
         rampFixSolidEnemies = null;

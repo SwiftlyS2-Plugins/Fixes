@@ -12,12 +12,6 @@
         "windows": "48 8D 0D ? ? ? ? 0F 11 44 24 ? 0F 11 44 24 ? E8",
         "linux": "48 8D 35 ? ? ? ? 89 C2 48 63 46"
     },
-    // Only ever referenced right next to string "TestActivator"
-    "CBaseFilter::InputTestActivator": {
-        "lib": "server",
-        "windows": "",
-        "linux": "55 48 89 E5 41 55 41 54 49 89 F4 53 48 89 FB 48 81 EC ? ? ? ? 48 8B 07 48 8B 16"
-    },
     // Search for "fill_with_minimum"; in the referencing function, find the helper called with teams 0, 2 and 3.
     "CstvBotQuotaFix::SelectAndKickBot": {
         "lib": "server",

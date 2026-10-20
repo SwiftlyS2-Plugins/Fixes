@@ -1,15 +1,33 @@
+using Fixes.Models;
+using Microsoft.Extensions.Options;
+using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Misc;
 
-namespace Fixes;
+namespace Fixes.Services.JumpSpamFix;
 
 // Blocks the "jump macro" exploit where a single tick's subtick moves fire the jump
 // button check more than once, letting a rebindable macro spam-jump for bhop-like speed.
-public partial class Fixes
+internal class JumpSpamFixService : IDisposable
 {
+    private readonly ISwiftlyCore _core;
+    private readonly IDisposable? _configChangeSubscription;
     private bool jumpSpamFixEnabled = false;
 
-    private void SetJumpSpamFixEnabled(bool enabled)
+    public JumpSpamFixService(ISwiftlyCore core, IOptionsMonitor<Configuration> config)
+    {
+        _core = core;
+        SetEnabled(config.CurrentValue.EnableJumpSpamFix);
+        _configChangeSubscription = config.OnChange(cfg => _core.Scheduler.NextTick(() => SetEnabled(cfg.EnableJumpSpamFix)));
+    }
+
+    public void Dispose()
+    {
+        _configChangeSubscription?.Dispose();
+        SetEnabled(false);
+    }
+
+    private void SetEnabled(bool enabled)
     {
         if (enabled == jumpSpamFixEnabled)
         {
@@ -29,18 +47,18 @@ public partial class Fixes
 
     private void EnableJumpSpamFix()
     {
-        Core.GameHooks.Movement.CheckJumpButtonModern.Pre += OnCheckJumpButtonModernPre;
-        Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre += OnCheckJumpButtonLegacyPre;
-        Core.GameHooks.Movement.OnJumpModern.Post += OnJumpModernPost;
-        Core.GameHooks.Movement.OnJumpLegacy.Post += OnJumpLegacyPost;
+        _core.GameHooks.Movement.CheckJumpButtonModern.Pre += OnCheckJumpButtonModernPre;
+        _core.GameHooks.Movement.CheckJumpButtonLegacy.Pre += OnCheckJumpButtonLegacyPre;
+        _core.GameHooks.Movement.OnJumpModern.Post += OnJumpModernPost;
+        _core.GameHooks.Movement.OnJumpLegacy.Post += OnJumpLegacyPost;
     }
 
     private void DisableJumpSpamFix()
     {
-        Core.GameHooks.Movement.CheckJumpButtonModern.Pre -= OnCheckJumpButtonModernPre;
-        Core.GameHooks.Movement.CheckJumpButtonLegacy.Pre -= OnCheckJumpButtonLegacyPre;
-        Core.GameHooks.Movement.OnJumpModern.Post -= OnJumpModernPost;
-        Core.GameHooks.Movement.OnJumpLegacy.Post -= OnJumpLegacyPost;
+        _core.GameHooks.Movement.CheckJumpButtonModern.Pre -= OnCheckJumpButtonModernPre;
+        _core.GameHooks.Movement.CheckJumpButtonLegacy.Pre -= OnCheckJumpButtonLegacyPre;
+        _core.GameHooks.Movement.OnJumpModern.Post -= OnJumpModernPost;
+        _core.GameHooks.Movement.OnJumpLegacy.Post -= OnJumpLegacyPost;
     }
 
     private void OnCheckJumpButtonModernPre(ref CheckJumpButtonModernMovementPreContext ctx)

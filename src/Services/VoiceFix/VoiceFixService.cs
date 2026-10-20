@@ -1,19 +1,36 @@
+using Fixes.Models;
+using Microsoft.Extensions.Options;
+using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.Misc;
-using SwiftlyS2.Shared.NetMessages;
 using SwiftlyS2.Shared.ProtobufDefinitions;
 
-namespace Fixes;
+namespace Fixes.Services.VoiceFix;
 
-public partial class Fixes
+internal class VoiceFixService : IDisposable
 {
+    private readonly ISwiftlyCore _core;
+    private readonly IDisposable? _configChangeSubscription;
     private ulong GlobalSeed = 0;
     private bool enableVoiceFix = false;
 
     private Guid? voiceDataSendHookId;
     private Guid? clientVoiceHookId;
 
-    private void SetVoiceFixEnabled(bool enabled)
+    public VoiceFixService(ISwiftlyCore core, IOptionsMonitor<Configuration> config)
+    {
+        _core = core;
+        SetEnabled(config.CurrentValue.EnableVoiceFix);
+        _configChangeSubscription = config.OnChange(cfg => _core.Scheduler.NextTick(() => SetEnabled(cfg.EnableVoiceFix)));
+    }
+
+    public void Dispose()
+    {
+        _configChangeSubscription?.Dispose();
+        SetEnabled(false);
+    }
+
+    private void SetEnabled(bool enabled)
     {
         if (enabled == enableVoiceFix)
         {
@@ -33,18 +50,18 @@ public partial class Fixes
 
     private void EnableVoiceFix()
     {
-        Core.Event.OnClientConnected += ConnectListener;
-        Core.Event.OnMapLoad += MapLoadListener;
-        voiceDataSendHookId = Core.NetMessage.HookServerMessageInternal<CSVCMsg_VoiceData>(OnVoiceDataSend);
-        clientVoiceHookId = Core.NetMessage.HookClientMessage<CCLCMsg_VoiceData>(OnClientVoice);
+        _core.Event.OnClientConnected += ConnectListener;
+        _core.Event.OnMapLoad += MapLoadListener;
+        voiceDataSendHookId = _core.NetMessage.HookServerMessageInternal<CSVCMsg_VoiceData>(OnVoiceDataSend);
+        clientVoiceHookId = _core.NetMessage.HookClientMessage<CCLCMsg_VoiceData>(OnClientVoice);
     }
 
     private void DisableVoiceFix()
     {
-        Core.NetMessage.Unhook(voiceDataSendHookId!.Value);
-        Core.NetMessage.Unhook(clientVoiceHookId!.Value);
-        Core.Event.OnClientConnected -= ConnectListener;
-        Core.Event.OnMapLoad -= MapLoadListener;
+        _core.NetMessage.Unhook(voiceDataSendHookId!.Value);
+        _core.NetMessage.Unhook(clientVoiceHookId!.Value);
+        _core.Event.OnClientConnected -= ConnectListener;
+        _core.Event.OnMapLoad -= MapLoadListener;
         voiceDataSendHookId = null;
         clientVoiceHookId = null;
         ResetVoiceState();
@@ -52,7 +69,7 @@ public partial class Fixes
 
     private void ResetVoiceState()
     {
-        foreach (var player in Core.PlayerManager.GetAllPlayers())
+        foreach (var player in _core.PlayerManager.GetAllPlayers())
         {
             player.FixesData.VoiceSeed = 0;
         }
@@ -75,7 +92,7 @@ public partial class Fixes
 
     void ConnectListener(IOnClientConnectedEvent @event)
     {
-        var player = Core.PlayerManager.GetPlayer(@event.PlayerId);
+        var player = _core.PlayerManager.GetPlayer(@event.PlayerId);
         if (player == null) return;
 
         player.FixesData.VoiceSeed = GetSeed();
@@ -85,7 +102,7 @@ public partial class Fixes
 
     public HookResult OnVoiceDataSend(CSVCMsg_VoiceData msg, int playerid)
     {
-        var player = Core.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return HookResult.Continue;
 
         var data = player.FixesData;

@@ -1,10 +1,11 @@
 using System.Runtime.CompilerServices;
+using Fixes.Services.RampFix;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using SwiftlyS2.Shared.Trace;
 
-namespace Fixes;
+namespace Fixes.Models;
 
 internal readonly struct RampFixTpmCandidate(bool overrode, Vector origin, Vector velocity)
 {

@@ -3,9 +3,8 @@ using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using SwiftlyS2.Shared.Trace;
 
-namespace Fixes;
+namespace Fixes.Services.RampFix;
 
-// Every field participates in cache invalidation, including live no-block rules.
 internal readonly record struct RampFixTracePolicy(ulong InteractsWith, ulong InteractsExclude,
     ulong InteractsAs, ushort HierarchyId, bool IgnoreTeammates, bool IgnoreEnemies, bool TeammatesAreEnemies)
 {
