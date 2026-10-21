@@ -14,4 +14,6 @@ public class Configuration
     public bool EnablePlayerGhostFix { get; set; } = true;
     public bool EnableCompetitiveCooldownFix { get; set; } = false;
     public bool EnableCstvBotQuotaFix { get; set; } = false;
+    public bool EnableSlowAnimationFix { get; set; } = false;
+    public float SlowAnimationReloadInterval { get; set; } = 1800f;
 }

@@ -8,6 +8,7 @@ using Fixes.Services.InputActivatorCrashFix;
 using Fixes.Services.JumpSpamFix;
 using Fixes.Services.PlayerGhostFix;
 using Fixes.Services.RampFix;
+using Fixes.Services.SlowAnimationFix;
 using Fixes.Services.SvCheatsFix;
 using Fixes.Services.TeamLimitFix;
 using Fixes.Services.VoiceFix;
@@ -56,6 +57,7 @@ public class Fixes : BasePlugin
             .AddSingleton<JumpSpamFixService>()
             .AddSingleton<PlayerGhostFixService>()
             .AddSingleton<RampFixService>()
+            .AddSingleton<SlowAnimationFixService>()
             .AddSingleton<SvCheatsFixService>()
             .AddSingleton<TeamLimitFixService>()
             .AddSingleton<VoiceFixService>()
@@ -73,6 +75,7 @@ public class Fixes : BasePlugin
         _ = _serviceProvider.GetRequiredService<JumpSpamFixService>();
         _ = _serviceProvider.GetRequiredService<PlayerGhostFixService>();
         _ = _serviceProvider.GetRequiredService<RampFixService>();
+        _ = _serviceProvider.GetRequiredService<SlowAnimationFixService>();
         _ = _serviceProvider.GetRequiredService<SvCheatsFixService>();
         _ = _serviceProvider.GetRequiredService<TeamLimitFixService>();
         _ = _serviceProvider.GetRequiredService<VoiceFixService>();

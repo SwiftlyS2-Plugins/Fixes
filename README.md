@@ -33,6 +33,7 @@ into one place, each one individually switchable.
 | Ramp bug | `EnableRampFix` | Off |
 | Ghost players | `EnablePlayerGhostFix` | On |
 | CSTV removed by bot quota | `EnableCstvBotQuotaFix` | Off |
+| Slow animations after long uptime | `EnableSlowAnimationFix` | Off |
 
 ## What each fix does
 
@@ -122,6 +123,17 @@ selects a bot to remove, allowing it to continue to an ordinary bot.
 
 Bot settings, explicit kicks and normal map/server shutdown remain unchanged.
 
+### Slow animations after long uptime
+
+The server clock is stored with limited precision, so after a day or two on the
+same map animations, movement and hit registration start to feel sluggish, and
+nothing in the game ever resets it. This fix checks every
+`SlowAnimationReloadInterval` seconds (default 1800, minimum 60) and, if no
+human player is connected, reloads the current map. Any remaining
+`mp_timelimit` is carried over to the reloaded map.
+
+Off by default because it changes the map on an empty server.
+
 ## Configuration
 
 Settings live in the plugin's `config.jsonc`:
@@ -140,7 +152,9 @@ Settings live in the plugin's `config.jsonc`:
     "EnableJumpSpamFix": true,
     "EnableRampFix": false,
     "EnablePlayerGhostFix": true,
-    "EnableCstvBotQuotaFix": false
+    "EnableCstvBotQuotaFix": false,
+    "EnableSlowAnimationFix": false,
+    "SlowAnimationReloadInterval": 1800
   }
 }
 ```
@@ -169,3 +183,5 @@ Thanks to zer0.k for the original ramp-bug fix logic, and to Nukoooo for the Mod
 port it was ported to SwiftlyS2 from ( https://github.com/Nukoooo/RampFix ).
 
 Thanks to Shmitzas for AntiPlayerGhost, which the ghost player fix is based on.
+
+Thanks to Slynx for the slow animation fix, ported from [GameFixes_mm](https://github.com/SlynxCZ/GameFixes_mm).
